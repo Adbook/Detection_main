@@ -39,24 +39,9 @@ void processVideo();
 using namespace cv;
 cv::VideoCapture capture;
 
-void help()
-{
-    cout
-    << "--------------------------------------------------------------------------" << endl
-    << "This program shows how to use background subtraction methods provided by "  << endl
-    << " OpenCV. You can process both videos (-vid) and images (-img)."             << endl
-                                                                                    << endl
-    << "Usage:"                                                                     << endl
-    << "./bs {-vid <video filename>|-img <image filename>}"                         << endl
-    << "for example: ./bs -vid video.avi"                                           << endl
-    << "or: ./bs -img /data/images/1.png"                                           << endl
-    << "--------------------------------------------------------------------------" << endl
-    << endl;
-}
 int main(int argc, char* argv[])
 {
-    //print help information
-    help();
+
 
     capture=cv::VideoCapture(0);
     if(!capture.isOpened())
@@ -128,7 +113,7 @@ MatND normalized_hue_saturation_histogram(MatND &hist){
     return n_hist;
 }
 
-MatND hue_saturation_backprojection(Mat image, MatND hs_hist, int huebins = 30, int satbins = 32){ //mat: image RGB, hs_hist: histogramme H-S normalisé
+MatND hue_saturation_backprojection(Mat image, MatND hs_hist, int huebins = 50, int satbins = 52){ //mat: image RGB, hs_hist: histogramme H-S normalisé
     Mat image_hsv;
     cvtColor(image, image_hsv, CV_BGR2HSV);
 
@@ -165,12 +150,21 @@ void processVideo() {
     Mat label_img = Mat(IM_H, IM_W, CV_8UC3);
     Mat connect_stats;
     Mat centroids;
-
+    std::vector<Vec3b> colors;
+    Mat frame_half;
+            Mat mat_test = Mat(IM_H, IM_W, CV_8U);
     vector<Point> points_capture;
     vector<Mat> hand_subdivisions;
-    
+    vector<MatND> hand_histograms;
+    vector<MatND> backprojections;
+
+    vector<vector<Point> > contours;
+    vector<Vec4i> hierarchy;
+
+    bool hand_captured = false;
     Point taille_captures = Point(10, 10);
     //read input data. ESC or 'q' for quitting
+
     while( (char)keyboard != 'q' && (char)keyboard != 27 ){
         //read the current frame
         if(!capture.read(frame)) {
@@ -178,125 +172,154 @@ void processVideo() {
             cerr << "Exiting..." << endl;
             exit(EXIT_FAILURE);
         }
+
+         medianBlur ( frame, frame, 9);
+
+        /***************************************/
         label_img = frame;
-     //   std::cout << "size :" << global_im.size().width << " " << global_im.size().height << std::endl;
 
-
-        //get the frame number and write it on the current frame
-       
-        //show the current frame and the fg masks
-        
-        cvtColor(frame, im_hsv, CV_BGR2HSV);
-        split(im_hsv, hsv_channels);
-        equalizeHist(hsv_channels[2], hsv_channels[2]);
-        merge(hsv_channels, im_hsv);
-        cvtColor(im_hsv, frame, CV_HSV2BGR);
-        GaussianBlur(frame, smoothed_frame, Size(15, 15), 0);
-
-//update the background model
-        pMOG2->apply(smoothed_frame, fgMaskMOG2, 0.0001);
-        pMOG2->getBackgroundImage(background);
-        cv::bitwise_and(smoothed_frame, smoothed_frame, resultat,  fgMaskMOG2);
-
-        backproj = hue_saturation_backprojection(smoothed_frame, hand_hs_hist);
-
-
-        threshold(backproj, thresd_backproj, 50, 255, THRESH_BINARY);
-        label_nb = connectedComponentsWithStats(thresd_backproj, labels, connect_stats, centroids, 8, CV_32S);
-
-
-        
-        //get the input from the keyboard
         keyboard = waitKey( 30 );
+        if(hand_captured){
+            char test[] = "a";
+            char test2[] = "z";
+            int i = 0;
 
-        sub_mat = frame;
-        Point p = Point(10, 10);
-     
-        int off_x = 30, off_y = 30, rect_w = 10, rect_h = 10;
-        Point start_point = Point(50, 100);
 
-        //rectangle(frame, Point(10, 10), Point(200, 300), Scalar(0, 0, 255));
+            for(auto m : hand_subdivisions){
+               
+                test[0] = 'a' + (char)i;
+                test2[0] = 'u' + (char)i;
+                Mat image2;
+                Mat image3 = Mat(IM_H, IM_W, CV_8UC3);
+                int delta = 10;
+                Vec3b c = (m.at<Vec3b>(5, 5));
+               // std::cout << c << std::endl;
+                inRange(frame, cv::Scalar(c[0] - delta, c[1] - delta, c[2] - delta), cv::Scalar(c[0] + delta, c[1] + delta, c[2] + delta), image2);
+                image3.setTo(cv::Scalar(c[0] - delta, c[1] - delta, c[2] - delta));
+                /*imshow(test, m);
+                imshow(test2, image3);*/
+                if(i == 0) mat_test = image2;
+                else mat_test += image2;
+                i++;
 
-        rectangle(frame, start_point + Point(off_x, -off_y), start_point + Point(off_x, -off_y) + Point(10, 10), Scalar(0, 0, 255));
-        for(int i = 0; i < 3; i += 1){
-            for(int j = 0; j < 3; j+= 1){
-                Point p1 = start_point + Point(i * off_x, j * off_y);
-                points_capture.push_back(p1);
-                Point p2 = p1 + Point(rect_w, rect_h);
-                rectangle(frame, p1, p2, Scalar(0, 0, 255));    
+                
             }
-            
+            cv::Mat sel = cv::getStructuringElement(MORPH_ELLIPSE, cv::Size(9,9));
+            //dilate(mat_test, mat_test, sel);
+            imshow("seuillages", mat_test);
+
+            label_nb = connectedComponentsWithStats(mat_test, labels, connect_stats, centroids, 8, CV_32S);
+
         }
-        draw_sub_window(0, 0, global_im, frame, "Frame");
-        draw_sub_window(1, 0, global_im, smoothed_frame, "Image pretraitee");
-        draw_sub_window(0, 1, global_im, background, "Estimation background");
-        draw_sub_window(1, 1, global_im, resultat, "Resultat back sub");
-        
-        imshow("global", global_im);
-        //imshow("FG Mask MOG 2", fgMaskMOG2);
-       
-        imshow("Backproj", backproj);
-        imshow("Thr_backproj", thresd_backproj);
-        //imshow("zones", labels);
 
+           sub_mat = frame;
+            Point p = Point(10, 10);
+         
+            int off_x = 10, off_y = 15, rect_w = 10, rect_h = 10;
+            Point start_point = Point(100, 100);
 
+            //rectangle(frame, Point(10, 10), Point(200, 300), Scalar(0, 0, 255));
+
+            rectangle(frame, start_point + Point(off_x, -off_y), start_point + Point(off_x, -off_y) + Point(10, 10), Scalar(0, 0, 255));
+            points_capture.clear();
+            for(int i = 0; i < 4; i += 1){
+                for(int j = 0; j < 7; j+= 1){
+                    Point p1 = start_point + Point(i * off_x, j * off_y);
+                    points_capture.push_back(p1);
+                    Point p2 = p1 + Point(rect_w, rect_h);
+                    rectangle(frame, p1, p2, Scalar(0, 0, 255));    
+                }
+                
+            }
+
+        imshow("frame", frame);
+
+        Mat objet = Mat(IM_H, IM_W, CV_8UC1);
+        objet = 0;
+        if(hand_captured){
+            int biggest_label = 1, max_area = connect_stats.at<int>(1, CC_STAT_AREA);
+            for(int label = 2; label < label_nb; label++){
+                int area = connect_stats.at<int32_t>(label, CC_STAT_AREA);
+                if(area > max_area){
+                    biggest_label = label;
+                    max_area = area;
+                }
+            }
+            for(int j = 0; j < IM_W; j++){
+                for(int i = 0; i < IM_H; i++){
+                    int label = labels.at<int32_t>(i, j);
+                    int area = connect_stats.at<int32_t>(label, CC_STAT_AREA);
+                    if(label == biggest_label)label_img.at<Vec3b>(i, j) = {128, 0, 0};
+                    if(label == biggest_label)objet.at<char>(i, j) = 255;
+                    else objet.at<char>(i, j) = 0;
+                }
+            }
+
+             findContours( objet, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
+           /* for(auto c:contours){
+                std::cout << c[0] << " " << c[1] << std::endl;
+            }*/
+             for( int i = 0; i< contours.size(); i++ )
+            
+            {
+                 drawContours( label_img, contours, i, {0, 0, 255}, 1, 8, vector<Vec4i>(), 0, Point() );
+            }
+
+            vector<vector<Point> >hull( 1 );
+            convexHull( Mat(contours[0]), hull[0], false ); 
+            drawContours( label_img, hull, 0, {0, 255, 0}, 4, 8, vector<Vec4i>(), 0, Point() );
+
+            imshow("img", label_img);
+          
+           // smoothed_frame.release();
+            resultat.release();
+            backproj.release();
+            thresd_backproj.release();
+        }
+
+        //std::cout << "test\n"//
         if((char)keyboard == 'a'){
             std::cout << "ecriture\n";
             cv::imwrite("test.png", frame);
         }else if((char)keyboard == 'b'){
             std::cout << labels;
-        }else if((char)keyboard == 's'){
+        }else if((char)keyboard == 's' && !hand_captured){
+            hand_subdivisions.clear();
+            Point taille_captures = Point(100, 100);
+            int j = 0;
             for(auto p : points_capture){
-                hand_subdivisions.push_back(Mat(frame, cv::Rect(p, p + taille_captures)));
+                Mat sample = Mat(frame, cv::Rect(p, p + taille_captures));
+                sample = sample.clone();
+                medianBlur ( sample, sample, 15);
+                hand_subdivisions.push_back(sample);
+                colors.push_back(sample.at<Vec3b>(5, 5));
+
+                //imshow("test", sample);
+                j++;
+               // std::cout << sample.at<Vec3b>(5, 5) << std::endl;
+            }
+
             
-            }
-            int i = 0;
-            /*for(auto m : hand_subdivisions){
-                imshow(std::string("test") + std::to_string(i),m);
+            hand_histograms.clear();  
+            int i = 0;       
+            char test[] = "a";   
+            for(auto m : hand_subdivisions){
+                test[0] = 'a' + (char)i;
+               // imshow(test, m);
+         //       hand_histograms.push_back(hue_saturation_histogram(m));
                 i++;
-            }*/
-            imshow("test", hand_subdivisions[0]);
+            }  
+            hand_captured = true;
+            std::cout << "cap\n";
+            keyboard = 'r';
         }
 
-        int biggest_label = 1, max_area = connect_stats.at<int>(1, CC_STAT_AREA);
-        for(int label = 2; label < label_nb; label++){
-            int area = connect_stats.at<int32_t>(label, CC_STAT_AREA);
-            if(area > max_area){
-                biggest_label = label;
-                max_area = area;
-            }
-        }
-       
-       // std::cout << "max label: " << "max area :" << max_area << std::endl;
-
-        for(int j = 0; j < IM_W; j++){
-            for(int i = 0; i < IM_H; i++){
-                //std::cout << i << " " << j << " " << labels.at<int>(i, j) << std::endl;
-                int label = labels.at<int32_t>(i, j);
-                int area = connect_stats.at<int32_t>(label, CC_STAT_AREA);
-                //std::cout << i << " " << j << "a: " << area << "l: " << label;
-                //std::cout << "stat: " << connect_stats.at<int>(label, CC_STAT_AREA) << " label: " << label << " x: " << j << " y " << i << " size: " << labels.size() <<std::endl;
-                //if(label == biggest_label)label_img.at<Vec3b>(i, j) = {128, 0, 0};
-                if(label == biggest_label)label_img.at<Vec3b>(i, j) = {128, 0, 0};
-               // else label_img.at<uchar>(i, j) = (uchar)0;
-            }
-        }
-        imshow("img", label_img);
-      
-        smoothed_frame.release();
-        resultat.release();
-        backproj.release();
-        thresd_backproj.release();
-
-
-
-
-
+    
 
     }
     std::ofstream f;
         f.open("test.txt");
-        f << labels << std::endl;
+        f << backproj << std::endl;
         f.close();
     //delete capture object
     capture.release();
