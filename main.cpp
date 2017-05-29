@@ -85,7 +85,7 @@ void draw_nth_label(Mat &frame, Mat &masque, int n_label, Mat labels){
     for(int j = 0; j < IM_W; j++){
         for(int i = 0; i < IM_H; i++){
             int label = labels.at<int32_t>(i, j);
-            if(label == n_label)frame.at<Vec3b>(i, j) = {128, 0, 0};
+            //if(label == n_label)frame.at<Vec3b>(i, j) = {128, 0, 0};
             if(label == n_label)masque.at<char>(i, j) = 255;
             else masque.at<char>(i, j) = 0;
         }
@@ -137,6 +137,7 @@ cv::Point get_hand_pos(Mat &frame, std::vector<Mat> hand_subdivisions) {
     objet = 0;
     int biggest_label = get_biggest_label_id(connect_stats, label_nb);
     draw_nth_label(frame, objet, biggest_label, labels);
+    
     cv::findContours( objet, contours, hierarchy, CV_RETR_TREE, CV_CHAIN_APPROX_SIMPLE, Point(0, 0) );
 
     std::vector<std::vector<Point> >hull( 1 );
@@ -160,13 +161,13 @@ void processVideo(){
             exit(EXIT_FAILURE);
         }
         keyboard = waitKey( 30 );
-
+	cv::flip(frame, frame, 1);
 
         if(!hand_captured)
             points_capture = create_sample_points(4, 7, 10, cv::Point(100, 200), 10, 10, frame);
         else {
-            Mat frame_clone = frame.clone();
-            cv::Point centre = get_hand_pos(frame_clone, hand_subdivisions);
+            //Mat frame_clone = frame.clone();
+            cv::Point centre = get_hand_pos(frame/*_clone*/, hand_subdivisions);
             cv::circle(frame, centre, 3, cv::Scalar(0, 0, 255), 3);
         }
 
